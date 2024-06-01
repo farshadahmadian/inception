@@ -1,0 +1,93 @@
+version: "3.8"
+services:
+  nginx:
+    depends_on:
+      wordpress:
+        condition: service_healthy
+    build: ./requirements/nginx/.
+    image: nginx
+    container_name: nginx_container
+    ports:
+      - 443:443
+    networks:
+      - inception
+    volumes:
+      - wordpress:/var/www/html
+    restart: always
+    secrets:
+      - source: ssl_certificate
+      - source: ssl_certificate_key
+  wordpress:
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wp", "core", "is-installed"]
+      interval: 3s
+      timeout: 3s
+      retries: 2
+      start_period: 2s
+    build: ./requirements/wordpress/.
+    image: wordpress
+    container_name: wordpress_container
+    networks:
+      - inception
+    volumes:
+      - wordpress:/var/www/html
+    env_file:
+      - ./requirements/wordpress/.env
+    restart: always
+    secrets:
+      - source: db_user_password
+      - source: wp_admin_pass
+      - source: wp_user_pass
+  mariadb:
+    healthcheck:
+      test: ["CMD", "/db-init/./healthcheck.sh"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    build: ./requirements/mariadb/.
+    image: mariadb
+    container_name: mariadb_container
+    networks:
+      - inception
+    volumes:
+      - db:/var/lib/mysql
+    env_file:
+      - ./requirements/mariadb/.env
+    restart: always
+    secrets:
+      - source: db_user_password
+      - source: db_root_password
+
+volumes:
+  wordpress:
+    name: wordpress
+    driver_opts:
+      type: none
+      device: /home/fahmadia/data/wordpress
+      o: bind
+  db:
+    name: db
+    driver_opts:
+      type: none
+      device: /home/fahmadia/data/db
+      o: bind
+networks:
+  inception:
+    name: inception
+secrets:
+  ssl_certificate_key:
+    file: ../secrets/certificate.key
+  ssl_certificate:
+    file: ../secrets/certificate.crt
+  db_user_password:
+    file: ../secrets/db_user_password.txt
+  db_root_password:
+    file: ../secrets/db_root_password.txt
+  wp_admin_pass:
+    file: ../secrets/wp_admin_password.txt
+  wp_user_pass:
+    file: ../secrets/wp_user_password.txt
